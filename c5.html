@@ -1,0 +1,300 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="referrer" content="no-referrer">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/shaka-player@4.16.2/dist/controls.css">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{width:100%;height:100%;background:#0a0a0a;overflow:hidden;font-family:'Segoe UI',Roboto,Helvetica,Arial,sans-serif}
+#player-container{position:fixed;inset:0;background:#000;display:flex;align-items:center;justify-content:center}
+video{width:100%;height:100%;object-fit:contain;background:#000}
+video.mode-fill{object-fit:fill}
+video.mode-cover{object-fit:cover}
+#status{position:fixed;top:max(16px,env(safe-area-inset-top));right:16px;z-index:9997;display:flex;align-items:center;gap:7px;padding:6px 15px 6px 11px;background:rgba(10,10,10,.88);border:1px solid rgba(255,255,255,.07);font-size:11.5px;font-weight:500;letter-spacing:.2px;border-radius:24px;pointer-events:none;opacity:0;transition:opacity .25s ease;backdrop-filter:blur(14px);color:#c0c0c0}
+#status.show{opacity:1}
+.st-dot{width:7px;height:7px;border-radius:50%;background:#60a5fa}
+#status.live .st-dot{background:#22d3a0;animation:dot-pulse 2s infinite}
+#status.warn .st-dot{background:#fb923c;animation:dot-pulse 1s infinite}
+#status.err .st-dot{background:#f87171}
+@keyframes dot-pulse{50%{opacity:.35;transform:scale(.55)}}
+.sp-fit-btn{background:transparent!important;border:none!important;cursor:pointer!important;padding:0 7px!important;min-width:auto!important;opacity:.75;display:flex;align-items:center;justify-content:center;height:100%;color:#fff!important}
+.sp-fit-btn:hover{opacity:1}
+.fit-pill{font-size:10px;font-weight:700;letter-spacing:.4px;padding:3px 7px;border-radius:4px;line-height:1;border:1.5px solid rgba(255,255,255,.28);color:rgba(255,255,255,.8);pointer-events:none;white-space:nowrap}
+.sp-fit-btn.mode-fill .fit-pill{border-color:#38bdf8;color:#38bdf8}
+.sp-fit-btn.mode-cover .fit-pill{border-color:#a78bfa;color:#a78bfa}
+.shaka-controls-container button{color:#fff!important}
+.shaka-video-container{background:#000!important}
+@media(max-width:380px){.fit-pill{font-size:9px;padding:2px 5px}}
+</style>
+</head>
+<body>
+
+<div id="player-container">
+<video id="video" autoplay muted playsinline preload="metadata"></video>
+</div>
+
+<div id="status"><span class="st-dot"></span><span id="statusText">Live</span></div>
+
+<script src="https://cdn.jsdelivr.net/npm/shaka-player@4.16.2/dist/shaka-player.ui.min.js"></script>
+<script>if (confirm("Join Our Telegram Channel @livecrichdofficial")) { window.location.href = "https://telegram.me/+WOHjeld4UV9lYWJl"; }</script>
+<script>
+(function(){
+"use strict";
+
+const CONFIG={
+streams:{
+S3:{
+mpd:"https://jiotvpllive.cdn.jio.com/bpk-tv/SonySportsTen3HinHDSTB_BTS/WDVLive/index.mpd",
+cookieUrl:"https://shindi.govag55623.workers.dev/",
+keys:[
+"c20ba4e9d0635bab9f17b177f0d91039:fcb4a266539ac7b03ef02c5600c5598d",
+"c592c427c0d35e9a8ad88cdcb76a16c1:8ecb737e4015c22451d6c14fe37e9e15",
+"10f4930166fa5b6ab5d71a4a978bdfac:9dfa22aa4d6a3d820101f59013de0236",
+"140edf90fa0b5c99864f2442df4df535:991b51ed2e690c96163a31ae4a6f6452",
+"e392571e46bd5461854986ae9e58083d:1167c024aa8bbad2c1beaf218cfeec11"
+]
+},
+
+S1:{
+mpd:"https://jiotvpllive.cdn.jio.com/bpk-tv/SonySportsTen1HDSTB_BTS/WDVLive/index.mpd",
+cookieUrl:"https://senglish.govag55623.workers.dev/",
+keys:[
+"3cd96ce073bb51428a454251943143b8:9cf359bd8e323b05248caacc2b4da6c9",
+"4ad1bbe0ba195aceb58a6e5f1ee3cc6f:4804a8a9a97bb14b0488e08942ab85e3",
+"b5185c603f4c5cb794d9dae1b55bce38:c019b2cd8c7944cc90b66cfce3b7132c",
+"36ce7134ee6753beb5c0126e5c8cce02:c28f9b7c3c5d8b8416820173637770a4",
+"8307b4c86cbc54e3a4a635b662e5a44a:41a0b587ea7e3bff24156ef9b27c87dc"
+]
+}
+}
+};
+
+const params=new URLSearchParams(location.search);
+const selectedId=(params.get("id")||"M1").toUpperCase();
+const stream=CONFIG.streams[selectedId];
+
+const video=document.getElementById("video");
+const container=document.getElementById("player-container");
+const statusEl=document.getElementById("status");
+const statusText=document.getElementById("statusText");
+
+let statusTimer=null;
+
+function setStatus(msg,type,dur){
+statusText.textContent=msg||"Live";
+statusEl.className="show "+(type||"live");
+if(statusTimer)clearTimeout(statusTimer);
+if(dur!==0){
+statusTimer=setTimeout(()=>statusEl.className="",dur||4000);
+}
+}
+
+function buildClearKeys(array){
+const result={};
+if(!Array.isArray(array))return result;
+array.forEach(pair=>{
+if(typeof pair!=="string")return;
+const idx=pair.indexOf(":");
+if(idx===-1)return;
+const kid=pair.slice(0,idx).trim();
+const key=pair.slice(idx+1).trim();
+if(kid&&key&&!kid.startsWith("ADD_SECOND"))result[kid]=key;
+});
+return result;
+}
+
+function injectFitButton(){
+const panel=container.querySelector(".shaka-controls-button-panel");
+if(!panel)return false;
+
+const anchor=panel.querySelector(".shaka-fullscreen-button");
+const fits=["contain","fill","cover"];
+const labels={contain:"Fit",fill:"Fill",cover:"Zoom"};
+let fitIdx=0;
+let currentRatio="—";
+
+const btn=document.createElement("button");
+btn.className="sp-fit-btn";
+btn.title="Video Fit";
+btn.setAttribute("aria-label","Cycle Video Fit Mode");
+btn.innerHTML='<span class="fit-pill">—</span>';
+
+if(anchor)panel.insertBefore(btn,anchor);
+else panel.appendChild(btn);
+
+function applyFit(i){
+fitIdx=i;
+const mode=fits[i];
+video.classList.remove("mode-fill","mode-cover");
+btn.classList.remove("mode-fill","mode-cover");
+if(mode!=="contain"){
+video.classList.add("mode-"+mode);
+btn.classList.add("mode-"+mode);
+}
+btn.title="Video Fit: "+labels[mode];
+btn.querySelector(".fit-pill").textContent=mode==="contain"?currentRatio:labels[mode];
+}
+
+btn.addEventListener("click",e=>{
+e.stopPropagation();
+applyFit((fitIdx+1)%3);
+});
+
+function ratioLabel(w,h){
+if(!w||!h)return "—";
+function gcd(a,b){return b?gcd(b,a%b):a}
+const g=gcd(w,h)||1;
+const rw=w/g,rh=h/g;
+const real=w/h;
+const named={"16:9":16/9,"4:3":4/3,"21:9":21/9,"1:1":1,"9:16":9/16,"3:2":3/2,"5:4":5/4,"2:1":2};
+let best=null,diff=.02;
+Object.keys(named).forEach(k=>{
+const d=Math.abs(named[k]-real);
+if(d<diff){diff=d;best=k}
+});
+return best||((rw<=40&&rh<=40)?rw+":"+rh:real.toFixed(2)+":1");
+}
+
+function updateRatio(){
+if(video.videoWidth>0){
+currentRatio=ratioLabel(video.videoWidth,video.videoHeight);
+if(fits[fitIdx]==="contain")btn.querySelector(".fit-pill").textContent=currentRatio;
+}
+}
+
+video.addEventListener("loadedmetadata",updateRatio);
+video.addEventListener("resize",updateRatio);
+updateRatio();
+
+document.addEventListener("fullscreenchange",()=>{
+if(!document.fullscreenElement)applyFit(0);
+});
+
+return true;
+}
+
+async function initPlayer(){
+
+if(!stream){
+setStatus("Invalid Stream ID","err",0);
+return;
+}
+
+if(!stream.mpd||stream.mpd.startsWith("ADD_SECOND")){
+setStatus("M2 MPD Not Configured","err",0);
+return;
+}
+
+if(!stream.cookieUrl||stream.cookieUrl.startsWith("ADD_SECOND")){
+setStatus("M2 Cookie URL Not Configured","err",0);
+return;
+}
+
+shaka.polyfill.installAll();
+
+if(!shaka.Player.isBrowserSupported()){
+setStatus("Browser Not Supported","err",0);
+return;
+}
+
+const player=new shaka.Player();
+await player.attach(video);
+
+const ui=new shaka.ui.Overlay(player,container,video);
+
+ui.configure({
+addBigPlayButton:true,
+controlPanelElements:[
+"play_pause",
+"mute",
+"time_and_duration",
+"spacer",
+"quality",
+"picture_in_picture",
+"fullscreen"
+],
+seekBarColors:{
+base:"#828282",
+buffered:"#ffc336",
+played:"#1fc7ff"
+}
+});
+
+let attempts=0;
+(function tryInject(){
+if(injectFitButton())return;
+if(++attempts<10)setTimeout(tryInject,200);
+})();
+
+player.configure({
+drm:{clearKeys:buildClearKeys(stream.keys)},
+manifest:{defaultPresentationDelay:5},
+streaming:{
+lowLatencyMode:true,
+bufferingGoal:10,
+rebufferingGoal:2,
+safeSeekOffset:5
+}
+});
+
+let cookieValue="";
+
+try{
+setStatus("Fetching "+selectedId+" Cookie…","warn",0);
+const response=await fetch(stream.cookieUrl,{cache:"no-store"});
+if(!response.ok)throw new Error("Cookie HTTP "+response.status);
+const data=await response.json();
+cookieValue=data.cookie||"";
+}catch(e){
+setStatus("Cookie Fetch Failed","err",0);
+return;
+}
+
+if(cookieValue){
+player.getNetworkingEngine().registerRequestFilter(function(type,request){
+request.headers["Referer"]="https://www.jiotv.com/";
+request.headers["User-Agent"]="plaYtv/7.1.5 (Linux;Android 13) ExoPlayerLib/2.11.6";
+request.headers["Cookie"]=cookieValue;
+
+const urlCookie=cookieValue.startsWith("__hdnea__=")?cookieValue.slice(10):cookieValue;
+
+if((type===shaka.net.NetworkingEngine.RequestType.MANIFEST||
+type===shaka.net.NetworkingEngine.RequestType.SEGMENT)&&
+!request.uris[0].includes("__hdnea__")){
+const sep=request.uris[0].includes("?")?"&":"?";
+request.uris[0]+=sep+"__hdnea__="+urlCookie;
+}
+});
+}
+
+try{
+setStatus("Loading "+selectedId+"…","warn",0);
+await player.load(stream.mpd);
+setStatus("Live - "+selectedId,"live",4000);
+video.play().catch(()=>{});
+}catch(e){
+setStatus("Error loading "+selectedId,"err",0);
+}
+
+video.addEventListener("play",()=>video.muted=false);
+
+function unmute(){video.muted=false}
+container.addEventListener("pointerdown",unmute,{capture:true,once:true});
+container.addEventListener("click",unmute,{capture:true,once:true});
+
+player.addEventListener("error",ev=>{
+setStatus("Stream error: "+ev.detail.code,"err",5000);
+});
+}
+
+document.addEventListener("DOMContentLoaded",initPlayer);
+
+})();
+</script>
+</body>
+</html>
